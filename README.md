@@ -293,6 +293,9 @@ public repository, **GENIE BPC CRC FOLFOX transportability study**. The numbered
 their executed outputs. Restricted patient-level data and patient-level derived artifacts are not
 included; access to the source data remains governed by the applicable data-use agreement.
 
-The manuscript-associated version is released as `v0.1.0` and archived in Zenodo. Cite the
-version-specific Zenodo record when referring to the exact code used for the study. Citation
-metadata are provided in [`CITATION.cff`](CITATION.cff).
+The manuscript-associated version is released as
+[`v0.1.0`](https://github.com/CamilaSarmiento52/genie-crc-folfox-survival-transportability/releases/tag/v0.1.0)
+and archived in Zenodo at
+[`https://doi.org/10.5281/zenodo.22075298`](https://doi.org/10.5281/zenodo.22075298).
+Cite this version-specific Zenodo record when referring to the exact code used for the study.
+Citation metadata are provided in [`CITATION.cff`](CITATION.cff).
