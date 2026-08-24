@@ -1,0 +1,44 @@
+{
+  "version": "2026-08-03",
+  "baseline": [
+    "age_at_folfox",
+    "metastatic_presentation",
+    "ca_d_site",
+    "number_metastatic_sites"
+  ],
+  "core": [
+    "age_at_folfox",
+    "naaccr_sex_code",
+    "race_ethnicity",
+    "metastatic_presentation",
+    "crc_type",
+    "ca_d_site",
+    "ca_grade",
+    "dmets_abdomen",
+    "dmets_bone",
+    "dmets_brain",
+    "dmets_liver",
+    "dmets_pelvis",
+    "dmets_thorax",
+    "prior_oxaliplatin",
+    "biologic_with_folfox"
+  ],
+  "features": [
+    {"name":"age_at_folfox","role":"continuous","source_table":"cohort","source_columns":["age_at_regimen"],"derivation":"copy","dtype":"float","observation_day_rule":"derived_at_folfox","missing_allowed":false,"reference_rule":"none","encoding":"continuous","effective_df_rule":"1","sets":["baseline","core"]},
+    {"name":"naaccr_sex_code","role":"categorical","source_table":"patient","source_columns":["naaccr_sex_code"],"derivation":"copy","dtype":"string","observation_day_rule":"patient_baseline","missing_allowed":false,"reference_rule":"Female","encoding":"training_only_one_hot","effective_df_rule":"levels_after_training_pooling_minus_1","sets":["core"]},
+    {"name":"race_ethnicity","role":"categorical","source_table":"patient","source_columns":["race_ethnicity"],"derivation":"copy","dtype":"string","observation_day_rule":"patient_baseline","missing_allowed":false,"reference_rule":"Non-Hispanic White","encoding":"training_only_one_hot","effective_df_rule":"levels_after_training_pooling_minus_1","sets":["core"]},
+    {"name":"metastatic_presentation","role":"binary","source_table":"cohort","source_columns":["metastatic_presentation"],"derivation":"copy","dtype":"string","observation_day_rule":"derived_before_folfox","missing_allowed":false,"reference_rule":"Recurrent/metachronous","encoding":"training_only_one_hot","effective_df_rule":"1","sets":["baseline","core"]},
+    {"name":"crc_type","role":"categorical","source_table":"cancer_index","source_columns":["crc_type"],"derivation":"copy","dtype":"string","observation_day_rule":"index_cancer_baseline","missing_allowed":true,"reference_rule":"Left colon","encoding":"training_only_one_hot","effective_df_rule":"levels_after_training_pooling_minus_1","sets":["core"]},
+    {"name":"ca_d_site","role":"categorical","source_table":"cancer_index","source_columns":["ca_d_site"],"derivation":"copy","dtype":"string","observation_day_rule":"index_cancer_baseline","missing_allowed":false,"reference_rule":"training_mode_then_lexical","encoding":"training_only_one_hot","effective_df_rule":"levels_after_training_pooling_minus_1","sets":["baseline","core"]},
+    {"name":"ca_grade","role":"categorical","source_table":"cancer_index","source_columns":["ca_grade"],"derivation":"copy","dtype":"string","observation_day_rule":"index_cancer_baseline","missing_allowed":true,"reference_rule":"II","encoding":"training_only_one_hot","effective_df_rule":"levels_after_training_pooling_minus_1","sets":["core"]},
+    {"name":"dmets_abdomen","role":"binary","source_table":"cancer_index","source_columns":["dmets_abdomen"],"derivation":"copy","dtype":"integer","observation_day_rule":"documented_by_folfox","missing_allowed":false,"reference_rule":"0","encoding":"binary","effective_df_rule":"1","sets":["core"]},
+    {"name":"dmets_bone","role":"binary","source_table":"cancer_index","source_columns":["dmets_bone"],"derivation":"copy","dtype":"integer","observation_day_rule":"documented_by_folfox","missing_allowed":false,"reference_rule":"0","encoding":"binary","effective_df_rule":"1","sets":["core"]},
+    {"name":"dmets_brain","role":"binary","source_table":"cancer_index","source_columns":["dmets_brain"],"derivation":"copy","dtype":"integer","observation_day_rule":"documented_by_folfox","missing_allowed":false,"reference_rule":"0","encoding":"binary","effective_df_rule":"1","sets":["core"]},
+    {"name":"dmets_liver","role":"binary","source_table":"cancer_index","source_columns":["dmets_liver"],"derivation":"copy","dtype":"integer","observation_day_rule":"documented_by_folfox","missing_allowed":false,"reference_rule":"0","encoding":"binary","effective_df_rule":"1","sets":["core"]},
+    {"name":"dmets_pelvis","role":"binary","source_table":"cancer_index","source_columns":["dmets_pelvis"],"derivation":"copy","dtype":"integer","observation_day_rule":"documented_by_folfox","missing_allowed":false,"reference_rule":"0","encoding":"binary","effective_df_rule":"1","sets":["core"]},
+    {"name":"dmets_thorax","role":"binary","source_table":"cancer_index","source_columns":["dmets_thorax"],"derivation":"copy","dtype":"integer","observation_day_rule":"documented_by_folfox","missing_allowed":false,"reference_rule":"0","encoding":"binary","effective_df_rule":"1","sets":["core"]},
+    {"name":"number_metastatic_sites","role":"continuous","source_table":"cancer_index","source_columns":["dmets_abdomen","dmets_bone","dmets_brain","dmets_liver","dmets_pelvis","dmets_thorax"],"derivation":"integer_sum","dtype":"integer","observation_day_rule":"documented_by_folfox","missing_allowed":false,"reference_rule":"none","encoding":"continuous","effective_df_rule":"1","sets":["baseline"]},
+    {"name":"prior_oxaliplatin","role":"binary","source_table":"cohort","source_columns":["prior_oxaliplatin"],"derivation":"strictly_prior_regimen","dtype":"boolean","observation_day_rule":"strictly_before_folfox","missing_allowed":false,"reference_rule":"false","encoding":"binary","effective_df_rule":"1","sets":["core"]},
+    {"name":"biologic_with_folfox","role":"binary","source_table":"cohort","source_columns":["biologic_with_folfox"],"derivation":"index_regimen_class","dtype":"boolean","observation_day_rule":"at_folfox","missing_allowed":false,"reference_rule":"false","encoding":"binary","effective_df_rule":"1","sets":["core"]}
+  ]
+}

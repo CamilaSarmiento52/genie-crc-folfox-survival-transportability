@@ -1,0 +1,24 @@
+# Restricted-access GENIE BPC data (Synapse Data Use Agreement — do not commit)
+crc_data/
+crc_data.zip
+
+# Regenerable analysis outputs derived from restricted data
+analysis/out/
+
+# Python
+.venv/
+.uv-cache/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.jupyter-data/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# OS
+.DS_Store
