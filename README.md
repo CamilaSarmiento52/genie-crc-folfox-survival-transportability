@@ -285,3 +285,14 @@ release public.
 - Failed fits, low-support estimates, and unfavorable comparisons remain visible in the output.
 - Restricted identifiers and patient-level predictions are not published.
 - Generated restricted-data artifacts stay under gitignored directories.
+
+## Code availability and citation
+
+The analysis code and executed Jupyter notebooks supporting this study are available in this
+public repository, **GENIE BPC CRC FOLFOX transportability study**. The numbered notebooks retain
+their executed outputs. Restricted patient-level data and patient-level derived artifacts are not
+included; access to the source data remains governed by the applicable data-use agreement.
+
+The manuscript-associated version is released as `v0.1.0` and archived in Zenodo. Cite the
+version-specific Zenodo record when referring to the exact code used for the study. Citation
+metadata are provided in [`CITATION.cff`](CITATION.cff).
