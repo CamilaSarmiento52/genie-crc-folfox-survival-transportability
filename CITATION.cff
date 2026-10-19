@@ -12,9 +12,9 @@ abstract: >-
 authors:
   - family-names: Sarmiento
     given-names: Camila
-version: 0.1.0
-date-released: 2026-08-24
-doi: 10.5281/zenodo.22075298
+version: 0.2.0
+date-released: 2026-10-19
+doi: 10.5281/zenodo.22075297
 repository-code: >-
   https://github.com/CamilaSarmiento52/genie-crc-folfox-survival-transportability
 url: >-
