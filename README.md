@@ -38,10 +38,10 @@ another treatment and should not be used for individual treatment decisions.
 
 | Location | Purpose |
 | --- | --- |
-| [`notebooks/`](notebooks/) | Human-readable analysis, in execution order from data cleaning through manuscript assembly. |
+| [`notebooks/`](notebooks/) | Human-readable analysis, in execution order from data cleaning through the supplementary analyses. |
 | [`src/crc_folfox/`](src/crc_folfox/) | Tested implementation used by the notebooks. This is where cohort rules, transformations, models, metrics, and reporting logic live. |
 | [`r/`](r/) | Pinned R environment and adapters for counting-process survival models. R fits and predicts; scoring remains in Python. |
-| [`scripts/`](scripts/) | Standalone runners for long or supplementary analyses and figure generation. |
+| [`scripts/`](scripts/) | Standalone runners for long or supplementary analyses, figure generation, the model-specification export and the proportional-hazards assessment. |
 | `analysis/out/archive/` | Optional dated or frozen copies of generated artifacts. This directory is also gitignored. |
 
 
@@ -70,6 +70,10 @@ flowchart TD
     E --> N7["07 Robustness analyses"]
     N5 --> N6["06 Explainability"]
     M --> N6
+    M --> N8["08 Supplementary analyses"]
+    E --> N8
+    N5 --> N8
+    N6 --> N8
 ```
 
 | Notebook | What it does | Main Python boundary | Required inputs | Main outputs |
@@ -81,11 +85,39 @@ flowchart TD
 | [`05_optimization.ipynb`](notebooks/05_optimization.ipynb) | Corrects the elastic-net failure policy, reconciles the corrected results with the primary analysis, and evaluates a small exploratory candidate set. | `crc_folfox.optimize` | All outputs through model evaluation; R for R-based candidates | correction, reconciliation, exploratory model, and evaluation bundles |
 | [`06_explainability.ipynb`](notebooks/06_explainability.ipynb) | Explains one model at a time, persists aggregate intermediate results, and combines completed models into the final explainability bundle. | `crc_folfox.explain.run_model_explainability` and `aggregate_explainability_results` | Primary and corrected model bundles plus exploratory models | coefficients, partial effects, importance, selection and prediction stability, attribution agreement, figures |
 | [`07_sensitivity_analyses.ipynb`](notebooks/07_sensitivity_analyses.ipynb) | Tests sequencing lag, delayed-entry assumptions, complete-case subsets, endpoint robustness, calibration drift, local recalibration, and no-information comparisons. | `crc_folfox.sensitivity.run_sensitivity_workflow` | Dataset, preprocessing artifacts, primary model bundles, evaluation results | robustness tables, report, manifest, and figures |
+| [`08_supplementary_analyses.ipynb`](notebooks/08_supplementary_analyses.ipynb) | Exports the six frozen minimal Cox models as reproducible specifications, assesses proportional hazards at the frozen coefficients, and assembles the supplementary tables on support, hyperparameters, paired comparisons, importance and predicted-risk percentiles. | `scripts/export_models.py`, `scripts/run_ph_assessment.py`, `scripts/package_supplement.py` | All outputs through sensitivity analyses plus the forest runners; R for the proportional-hazards step | `supplementary/` model specifications, proportional-hazards tests and curves, supplementary tables S34 and S36 to S40 |
 
 
 The workflow manifests contain hashes of their inputs and outputs. Downstream steps verify those
 hashes before loading results, which prevents an artifact from being silently replaced between
 notebooks.
+
+## Supplementary analyses and model specifications
+
+Three runners in `scripts/` expose material that the manuscript's supplement reports. All three
+are read-only with respect to every earlier output: they verify a hash snapshot of
+`analysis/out/current/` before and after running, fit no new model for prediction, and write only
+aggregate results under `analysis/out/current/supplementary/`.
+
+| Runner | What it does | Output |
+| --- | --- | --- |
+| `scripts/export_models.py` | Exports the six frozen institution-held-out minimal Cox models (OS and TTNT-D, one per held-out centre) as JSON specifications with predictor coding, coefficients, centring means, baseline survival and preprocessing rules, then rebuilds predictions from those files alone and checks them against the saved bundles. | `supplementary/model_specification/` (Supplementary Table S31) |
+| `scripts/predict.py` | Standard-library predictor for the exported specifications, with no project imports, so a reader can reproduce an individual prediction outside this environment. Copied into the export folder. | used by the export |
+| `scripts/run_ph_assessment.py` | Post hoc proportional-hazards assessment of the frozen minimal and spline Cox models under delayed entry: Schoenfeld residuals and the Grambsch-Therneau test evaluated by R `survival::cox.zph` at the frozen coefficients, with Holm adjustment and the prespecified trigger rule applied in Python. Runs a synthetic engine-admission check first. Requires the R environment. | `supplementary/ph_assessment/` (Supplementary Table S34) |
+| `scripts/package_supplement.py` | Assembles the supplementary tables on sample support, hyperparameter grids and selections, paired complexity comparisons with materiality margins, importance values, and predicted-risk percentiles from the frozen evaluation outputs. The only new computation is the percentile summary of already-frozen held-out predictions. | `supplementary/supplementary_data/S34` to `S40` |
+
+`notebooks/08_supplementary_analyses.ipynb` runs the three in order and displays their outputs. To
+run them directly after the notebooks and the `scripts/` runners listed above have produced the
+primary outputs:
+
+```bash
+uv run python scripts/export_models.py
+uv run python scripts/run_ph_assessment.py
+uv run python scripts/package_supplement.py
+```
+
+The proportional-hazards runner needs `Rscript` on the path and the restored `r/renv` library;
+its R adapter is `r/ph_adapter.R`.
 
 ## Requirements
 
@@ -170,6 +202,8 @@ verifies and consumes artifacts written by earlier notebooks.
 8. Generate the supplementary forest-comparison and subgroup bundles with the descriptive runners
    in `scripts/` if they are not already present. The long-running forest runner is resumable when
    the same run identifier is reused; consult each runner's module documentation and `--help` output.
+9. Repeat for `notebooks/08_supplementary_analyses.ipynb`, which runs the three supplementary
+   runners described below and displays their outputs.
 
 Important execution notes:
 

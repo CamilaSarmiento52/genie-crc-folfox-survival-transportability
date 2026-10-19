@@ -13,6 +13,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -28,10 +31,14 @@ from crc_folfox.model_training.contracts import ModelScope
 from crc_folfox.preprocessing.contracts import build_endpoint_view
 from crc_folfox.preprocessing.splits import build_iecv_splits
 
-
 HORIZON = 730.0
 THRESHOLDS = np.round(np.arange(0.20, 0.501, 0.01), 2)
 CENTRES = ("DFCI", "MSK", "VICC")
+FIGURE_WIDTH_IN = 6.5
+FIGURE_DPI = 300
+FONT_MIN_PT = 8.0
+INK = "#262626"
+GRID = "#b8b8b8"
 
 
 def _presentation_design(frame: pd.DataFrame) -> pd.DataFrame:
@@ -59,14 +66,99 @@ def _net_benefit(
     return float(true_positive - false_positive * threshold / (1.0 - threshold))
 
 
+def _render_decision_curve(result: pd.DataFrame, figure_path: Path) -> None:
+    """Render the frozen aggregate curve at its final manuscript dimensions."""
+
+    colours = {
+        "Four-variable Cox": "#1f4e79",
+        "Metastatic presentation only": "#d97706",
+        "Treat all": "#4d4d4d",
+        "Treat none": "#111111",
+    }
+    styles = {
+        "Four-variable Cox": "-",
+        "Metastatic presentation only": "-",
+        "Treat all": "--",
+        "Treat none": ":",
+    }
+    widths = {
+        "Four-variable Cox": 2.8,
+        "Metastatic presentation only": 2.8,
+        "Treat all": 2.2,
+        "Treat none": 2.2,
+    }
+    fig, axes = plt.subplots(1, 3, figsize=(FIGURE_WIDTH_IN, 3.15), sharex=True, sharey=True)
+    for panel_index, (axis, centre) in enumerate(zip(axes, CENTRES, strict=True)):
+        panel = result[result["held_out_centre"].eq(centre)]
+        if panel.empty:
+            raise ValueError(f"Decision-curve frame has no rows for {centre}")
+        for strategy in (
+            "Four-variable Cox",
+            "Metastatic presentation only",
+            "Treat all",
+            "Treat none",
+        ):
+            curve = panel[panel["strategy"].eq(strategy)]
+            axis.plot(
+                100 * curve["threshold_probability"],
+                100 * curve["net_benefit"],
+                color=colours[strategy],
+                linestyle=styles[strategy],
+                linewidth=widths[strategy],
+                label=strategy,
+            )
+        n_eligible = int(panel["eligible_at_horizon"].iloc[0])
+        n_events = int(panel["observed_deaths_by_horizon"].iloc[0])
+        panel_letter = chr(ord("A") + panel_index)
+        axis.set_title(
+            f"{panel_letter}.\n",
+            loc="left",
+            fontsize=9.0,
+            fontweight="bold",
+            color=INK,
+            pad=7,
+        )
+        axis.set_title(
+            f"{centre}\n{n_eligible} eligible; {n_events} deaths",
+            loc="center",
+            fontsize=8.0,
+            color=INK,
+            pad=7,
+        )
+        axis.set_xlim(20, 50)
+        axis.set_ylim(-46, 31)
+        axis.set_xticks([20, 30, 40, 50])
+        axis.grid(axis="y", color=GRID, linewidth=0.8, alpha=0.65)
+        axis.spines[["top", "right"]].set_visible(False)
+        axis.spines[["bottom", "left"]].set_color(INK)
+        axis.spines[["bottom", "left"]].set_linewidth(1.0)
+        axis.set_xlabel("Threshold probability (%)", fontsize=8.5)
+        axis.tick_params(labelsize=FONT_MIN_PT, colors=INK, width=1.0)
+    axes[0].set_ylabel("Net benefit per 100 patients", fontsize=8.5)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.02),
+        ncol=4,
+        frameon=False,
+        fontsize=FONT_MIN_PT,
+    )
+    fig.tight_layout(rect=(0, 0.12, 1, 1), w_pad=0.8)
+    figure_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(figure_path, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
 def generate(workspace: Path) -> tuple[Path, Path]:
     output_dir = workspace / "analysis" / "out" / "current" / "manuscript"
+    figures_dir = output_dir / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
     analysis_root = workspace / "analysis" / "out" / "current"
     data = pd.read_csv(analysis_root / "analysis_dataset.csv")
     view = build_endpoint_view(data, "OS")
-    registry = json.loads(
-        (analysis_root / "model_training" / "model_registry.json").read_text()
-    )
+    registry = json.loads((analysis_root / "model_training" / "model_registry.json").read_text())
     models_dir = analysis_root / "model_training" / "models"
 
     records: list[dict[str, object]] = []
@@ -88,10 +180,15 @@ def generate(workspace: Path) -> tuple[Path, Path]:
             entry_col="entry",
             show_progress=False,
         )
-        comparator_risk = 1.0 - comparator.predict_survival_function(
-            _presentation_design(assessment)[["de_novo_stage_iv"]],
-            times=[HORIZON],
-        ).to_numpy(dtype=float).ravel()
+        comparator_risk = (
+            1.0
+            - comparator.predict_survival_function(
+                _presentation_design(assessment)[["de_novo_stage_iv"]],
+                times=[HORIZON],
+            )
+            .to_numpy(dtype=float)
+            .ravel()
+        )
 
         censoring = fit_censoring_km(
             prediction.entry,
@@ -137,73 +234,8 @@ def generate(workspace: Path) -> tuple[Path, Path]:
     result = pd.DataFrame.from_records(records)
     csv_path = output_dir / "decision_curve_os_730.csv"
     result.to_csv(csv_path, index=False)
-
-    colours = {
-        "Four-variable Cox": "#1f4e79",
-        "Metastatic presentation only": "#d97706",
-        "Treat all": "#777777",
-        "Treat none": "#111111",
-    }
-    styles = {
-        "Four-variable Cox": "-",
-        "Metastatic presentation only": "-",
-        "Treat all": "--",
-        "Treat none": ":",
-    }
-    widths = {
-        "Four-variable Cox": 2.5,
-        "Metastatic presentation only": 2.5,
-        "Treat all": 1.7,
-        "Treat none": 1.7,
-    }
-    fig, axes = plt.subplots(1, 3, figsize=(11.2, 4.2), sharex=True, sharey=True)
-    for axis, centre in zip(axes, CENTRES, strict=True):
-        panel = result[result["held_out_centre"].eq(centre)]
-        for strategy in (
-            "Four-variable Cox",
-            "Metastatic presentation only",
-            "Treat all",
-            "Treat none",
-        ):
-            curve = panel[panel["strategy"].eq(strategy)]
-            axis.plot(
-                100 * curve["threshold_probability"],
-                100 * curve["net_benefit"],
-                color=colours[strategy],
-                linestyle=styles[strategy],
-                linewidth=widths[strategy],
-                label=strategy,
-            )
-        n_eligible = int(panel["eligible_at_horizon"].iloc[0])
-        n_events = int(panel["observed_deaths_by_horizon"].iloc[0])
-        axis.set_title(f"{centre}\n{n_eligible} eligible; {n_events} deaths", fontsize=12)
-        axis.set_xlim(20, 50)
-        axis.set_ylim(-46, 31)
-        axis.set_xticks([20, 30, 40, 50])
-        axis.grid(axis="y", color="#d9d9d9", linewidth=0.7)
-        axis.spines[["top", "right"]].set_visible(False)
-        axis.set_xlabel("Threshold probability (%)", fontsize=11)
-        axis.tick_params(labelsize=10)
-    axes[0].set_ylabel("Net benefit per 100 patients", fontsize=11)
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(
-        handles,
-        labels,
-        loc="lower center",
-        bbox_to_anchor=(0.5, -0.02),
-        ncol=4,
-        frameon=False,
-        fontsize=10,
-    )
-    fig.suptitle(
-        "Held-out decision-curve analysis for 730-day mortality",
-        fontsize=14,
-        fontweight="bold",
-    )
-    fig.tight_layout(rect=(0, 0.10, 1, 0.92))
-    figure_path = output_dir / "figures" / "figure5_decision_curve_os_730.png"
-    fig.savefig(figure_path, dpi=300, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
+    figure_path = figures_dir / "figure5_decision_curve_os_730.png"
+    _render_decision_curve(result, figure_path)
     return csv_path, figure_path
 
 

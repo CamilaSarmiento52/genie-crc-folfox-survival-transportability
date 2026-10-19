@@ -41,10 +41,15 @@ from crc_folfox.report.frames import (  # noqa: E402
 from crc_folfox.report.inputs import CanonicalInputs  # noqa: E402
 
 FIGURE_DPI = 300
-#: Uniform enlargement of every text element, applied at save time. Added 2026-08-22 after
-#: editorial feedback that figure text printed too small: the figures are placed at the full
-#: 6.5 in text width, and this scale keeps their smallest labels legible at that size.
-FIGURE_FONT_SCALE = 1.25
+#: Figures are drawn at the same width used by the manuscript renderer.  This matters more than a
+#: nominal font size: drawing at 12 inches and placing at 6.5 inches turns 9 pt source text into
+#: roughly 5 pt print text.  At this width, the source font size is the final printed font size.
+MANUSCRIPT_FIGURE_WIDTH_IN = 6.5
+FIGURE_FONT_MIN_PT = 8.0
+FIGURE_FONT_MAX_PT = 10.0
+FIGURE_FONT_SCALE = 1.0
+FIGURE_INK = "#262626"
+FIGURE_GRID = "#b8b8b8"
 PRIMARY_MODELS = ("minimal_cox", "spline_cox")
 PRIMARY_HORIZON = 730.0
 
@@ -66,11 +71,49 @@ class DisplayRecord:
 
 
 def _save(fig: plt.Figure, path: Path) -> None:
+    """Save at final manuscript size with print-safe type and strokes."""
+
     for text in fig.findobj(matplotlib.text.Text):
-        text.set_fontsize(text.get_fontsize() * FIGURE_FONT_SCALE)
+        scaled = text.get_fontsize() * FIGURE_FONT_SCALE
+        text.set_fontsize(min(FIGURE_FONT_MAX_PT, max(FIGURE_FONT_MIN_PT, scaled)))
+        if text.get_color() in {"#5f6368", "#616161", "#777777", "#9e9e9e"}:
+            text.set_color(FIGURE_INK)
+    for ax in fig.axes:
+        ax.tick_params(
+            axis="both",
+            which="both",
+            colors=FIGURE_INK,
+            labelsize=FIGURE_FONT_MIN_PT,
+            width=1.0,
+        )
+        for spine in ax.spines.values():
+            spine.set_color(FIGURE_INK)
+            spine.set_linewidth(max(spine.get_linewidth(), 1.0))
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=FIGURE_DPI, bbox_inches="tight")
+    fig.savefig(path, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
     plt.close(fig)
+
+
+def _set_panel_header(
+    ax: plt.Axes,
+    letter: str,
+    text: str,
+    *,
+    fontsize: float = 8.5,
+    pad: float = 7.0,
+) -> None:
+    """Add a bold panel letter separately from its descriptive header."""
+
+    panel_label = f"{letter}.\n" if "\n" in text else f"{letter}."
+    ax.set_title(
+        panel_label,
+        loc="left",
+        fontsize=fontsize,
+        fontweight="bold",
+        color=FIGURE_INK,
+        pad=pad,
+    )
+    ax.set_title(text, loc="center", fontsize=fontsize, color=FIGURE_INK, pad=pad)
 
 
 # --- Figure 1: cohort flow -----------------------------------------------------------------------
@@ -79,7 +122,7 @@ def _save(fig: plt.Figure, path: Path) -> None:
 def figure1_cohort_flow(flow: pd.DataFrame, output_dir: Path) -> DisplayRecord:
     """Draw one source-cohort path followed by two independent endpoint branches."""
 
-    fig, ax = plt.subplots(figsize=(10.2, 8.8))
+    fig, ax = plt.subplots(figsize=(MANUSCRIPT_FIGURE_WIDTH_IN, 6.2))
     ax.axis("off")
 
     main = flow[flow["scope"].isin({"release", "analysis_cohort"})].reset_index(drop=True)
@@ -104,13 +147,14 @@ def figure1_cohort_flow(flow: pd.DataFrame, output_dir: Path) -> DisplayRecord:
             f"{row['step']}: n = {int(row['patients'])}{detail}",
             ha="center",
             va="center",
-            fontsize=9.0,
+            fontsize=8.5,
+            color=FIGURE_INK,
             fontweight="bold" if is_primary else "normal",
             bbox={
                 "boxstyle": "round,pad=0.5",
                 "facecolor": "#e8f0fe" if is_primary else "#f5f5f5",
-                "edgecolor": "#1a73e8" if is_primary else "#9e9e9e",
-                "linewidth": 1.4 if is_primary else 0.8,
+                "edgecolor": "#1a73e8" if is_primary else "#4a4a4a",
+                "linewidth": 1.8 if is_primary else 1.2,
             },
         )
         if position:
@@ -119,7 +163,7 @@ def figure1_cohort_flow(flow: pd.DataFrame, output_dir: Path) -> DisplayRecord:
                 "",
                 xy=(x_main, y + 0.035),
                 xytext=(x_main, prior_y - 0.035),
-                arrowprops={"arrowstyle": "->", "color": "#616161", "linewidth": 0.9},
+                arrowprops={"arrowstyle": "->", "color": FIGURE_INK, "linewidth": 1.4},
             )
             excluded = int(previous_count - count) if previous_count is not None else 0
             midpoint = (prior_y + y) / 2
@@ -127,7 +171,7 @@ def figure1_cohort_flow(flow: pd.DataFrame, output_dir: Path) -> DisplayRecord:
                 "",
                 xy=(0.66, midpoint),
                 xytext=(x_main + 0.03, midpoint),
-                arrowprops={"arrowstyle": "->", "color": "#9e9e9e", "linewidth": 0.8},
+                arrowprops={"arrowstyle": "->", "color": FIGURE_INK, "linewidth": 1.3},
             )
             ax.text(
                 0.79,
@@ -135,12 +179,13 @@ def figure1_cohort_flow(flow: pd.DataFrame, output_dir: Path) -> DisplayRecord:
                 f"Excluded: n = {excluded}\n{exclusion_reasons[position - 1]}",
                 ha="center",
                 va="center",
-                fontsize=7.8,
+                fontsize=8.0,
+                color=FIGURE_INK,
                 bbox={
                     "boxstyle": "round,pad=0.35",
                     "facecolor": "#fff8e1",
-                    "edgecolor": "#bdbdbd",
-                    "linewidth": 0.7,
+                    "edgecolor": "#4a4a4a",
+                    "linewidth": 1.2,
                 },
             )
         previous_count = count
@@ -168,7 +213,7 @@ def figure1_cohort_flow(flow: pd.DataFrame, output_dir: Path) -> DisplayRecord:
             "",
             xy=(x, branch_y + 0.07),
             xytext=(x_main, primary_y - 0.04),
-            arrowprops={"arrowstyle": "->", "color": "#616161", "linewidth": 1.0},
+            arrowprops={"arrowstyle": "->", "color": FIGURE_INK, "linewidth": 1.5},
         )
         ax.text(
             x,
@@ -177,13 +222,14 @@ def figure1_cohort_flow(flow: pd.DataFrame, output_dir: Path) -> DisplayRecord:
             f"{EXPECTED_ELIGIBLE[endpoint]['events']}\n{centre_detail}",
             ha="center",
             va="center",
-            fontsize=8.3,
+            fontsize=8.5,
+            color=FIGURE_INK,
             fontweight="bold",
             bbox={
                 "boxstyle": "round,pad=0.5",
                 "facecolor": "#e8f0fe",
                 "edgecolor": "#1a73e8",
-                "linewidth": 1.4,
+                "linewidth": 1.8,
             },
         )
         ax.text(
@@ -193,21 +239,17 @@ def figure1_cohort_flow(flow: pd.DataFrame, output_dir: Path) -> DisplayRecord:
             f"{exclusion_reason}",
             ha="center",
             va="center",
-            fontsize=7.6,
+            fontsize=8.0,
+            color=FIGURE_INK,
             bbox={
                 "boxstyle": "round,pad=0.35",
                 "facecolor": "#fff8e1",
-                "edgecolor": "#bdbdbd",
-                "linewidth": 0.7,
+                "edgecolor": "#4a4a4a",
+                "linewidth": 1.2,
             },
         )
 
-    ax.set_title(
-        "Figure 1. Cohort flow, GENIE BPC CRC v2.0-public\n"
-        "Analysis populations are the delayed-entry-eligible rows, not the source cohort",
-        fontsize=10.5,
-        pad=14,
-    )
+    fig.tight_layout(pad=0.35)
     path = output_dir / "figure1_cohort_flow.png"
     _save(fig, path)
     return DisplayRecord(
@@ -274,7 +316,13 @@ def figure2_survival(km_frame: pd.DataFrame, output_dir: Path) -> DisplayRecord:
 
     if km_frame.empty:
         raise ReportContractError("Figure 2 has no delayed-entry OS survival rows")
-    fig, axes = plt.subplots(1, 2, figsize=(12.0, 5.2), sharex=True, sharey=True)
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=(MANUSCRIPT_FIGURE_WIDTH_IN, 3.25),
+        sharex=True,
+        sharey=True,
+    )
     colours = {
         "De novo Stage IV": "#d93025",
         "Recurrent/metachronous": "#1a73e8",
@@ -291,31 +339,35 @@ def figure2_survival(km_frame: pd.DataFrame, output_dir: Path) -> DisplayRecord:
         for group in panel["group"].drop_duplicates():
             cell = panel[panel["group"] == group].sort_values("time")
             support = cell.iloc[0]
-            label = f"{group} (n={int(support['n_patients'])}, events={int(support['n_events'])})"
+            label = f"{group}\n(n={int(support['n_patients'])}, events={int(support['n_events'])})"
             colour = colours.get(str(group), "#5f6368")
-            ax.step(cell["time"], cell["survival"], where="post", color=colour, lw=1.7, label=label)
+            ax.step(
+                cell["time"],
+                cell["survival"],
+                where="post",
+                color=colour,
+                lw=2.2,
+                label=label,
+            )
             ax.fill_between(
                 cell["time"].to_numpy(float),
                 cell["ci_lower"].to_numpy(float),
                 cell["ci_upper"].to_numpy(float),
                 step="post",
                 color=colour,
-                alpha=0.12,
-                linewidth=0,
+                alpha=0.18,
+                linewidth=0.6,
             )
-        ax.set_title(title, fontsize=10)
+        panel_letter, panel_title = title.split(". ", maxsplit=1)
+        _set_panel_header(ax, panel_letter, panel_title, fontsize=9.0)
         ax.set_xlim(0, 1460)
         ax.set_ylim(0, 1.02)
         ax.set_xticks((0, 365, 730, 1095, 1460))
-        ax.grid(alpha=0.2, linewidth=0.6)
-        ax.legend(fontsize=7.5, loc="lower left")
-        ax.set_xlabel("Days from FOLFOX initiation")
-    axes[0].set_ylabel("Overall survival probability")
-    fig.suptitle(
-        "Figure 2. Delayed-entry-adjusted overall survival from FOLFOX initiation",
-        fontsize=11,
-    )
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
+        ax.grid(color=FIGURE_GRID, alpha=0.65, linewidth=0.8)
+        ax.legend(fontsize=8.0, loc="lower left", frameon=False)
+        ax.set_xlabel("Days from FOLFOX initiation", fontsize=9.0)
+    axes[0].set_ylabel("Overall survival probability", fontsize=9.0)
+    fig.tight_layout()
     path = output_dir / "figure2_delayed_entry_survival.png"
     _save(fig, path)
     return DisplayRecord(
@@ -349,14 +401,30 @@ def figure3_calibration(inputs: CanonicalInputs, output_dir: Path) -> DisplayRec
         raise ReportContractError("Figure 3 has no held-out OS calibration rows at 730 days")
 
     scales = ("unconditional", "entry_conditional")
-    fig, axes = plt.subplots(2, 3, figsize=(12.0, 7.6), sharex=True, sharey=True)
+    fig, axes = plt.subplots(
+        2,
+        3,
+        figsize=(MANUSCRIPT_FIGURE_WIDTH_IN, 5.1),
+        sharex=True,
+        sharey=True,
+    )
 
+    legend_handles: dict[str, object] = {}
     for row_index, scale in enumerate(scales):
         for col_index, centre in enumerate(INSTITUTIONS):
             ax = axes[row_index][col_index]
             panel_letter = chr(ord("A") + row_index * len(INSTITUTIONS) + col_index)
             cell = subset[(subset["centre"] == centre) & (subset["risk_scale"] == scale)]
-            ax.plot([0, 1], [0, 1], linestyle="--", color="#9e9e9e", linewidth=1.0, zorder=1)
+            ideal_line = ax.plot(
+                [0, 0.8],
+                [0, 0.8],
+                linestyle="--",
+                color="#3f3f3f",
+                linewidth=1.6,
+                zorder=1,
+                label="Ideal",
+            )[0]
+            legend_handles.setdefault("Ideal", ideal_line)
             if not cell.empty:
                 low = cell["low_support"].astype(str).str.lower().eq("true")
                 ax.errorbar(
@@ -365,24 +433,27 @@ def figure3_calibration(inputs: CanonicalInputs, output_dir: Path) -> DisplayRec
                     yerr=cell["observed_risk_se"],
                     fmt="o-",
                     color="#1a73e8",
-                    ecolor="#90caf9",
-                    capsize=3,
-                    linewidth=1.3,
-                    markersize=5,
+                    ecolor="#376d9f",
+                    capsize=3.5,
+                    capthick=1.5,
+                    elinewidth=1.5,
+                    linewidth=2.0,
+                    markersize=6.2,
+                    markeredgewidth=1.2,
                     zorder=3,
                 )
                 if low.any():
-                    ax.scatter(
+                    low_support_marker = ax.scatter(
                         cell.loc[low, "mean_predicted_risk"],
                         cell.loc[low, "observed_risk"],
                         facecolors="none",
                         edgecolors="#d93025",
                         s=110,
-                        linewidths=1.4,
+                        linewidths=2.0,
                         zorder=4,
                         label="low support",
                     )
-                    ax.legend(fontsize=7, loc="lower right")
+                    legend_handles.setdefault("Low support", low_support_marker)
                 # The frozen curve artifact contains quintile counts rather than patient-level
                 # predictions. Thin bars show that distribution without leaking row-level risks.
                 max_n = max(float(cell["n"].max()), 1.0)
@@ -390,8 +461,10 @@ def figure3_calibration(inputs: CanonicalInputs, output_dir: Path) -> DisplayRec
                     cell["mean_predicted_risk"],
                     0.065 * cell["n"].astype(float) / max_n,
                     width=0.018,
-                    color="#5f6368",
-                    alpha=0.18,
+                    color="#595959",
+                    edgecolor="#262626",
+                    linewidth=0.8,
+                    alpha=0.48,
                     zorder=0,
                 )
 
@@ -404,28 +477,51 @@ def figure3_calibration(inputs: CanonicalInputs, output_dir: Path) -> DisplayRec
                 & (performance["horizon"] == PRIMARY_HORIZON)
                 & (performance["risk_scale"] == scale)
             ]
+            slope_text = "Slope not computable"
             if not slope.empty:
                 srow = slope.iloc[0]
                 status = _status_label(str(srow["reporting_status"]))
-                ax.set_title(
-                    f"{panel_letter}. {centre} - {scale.replace('_', '-')} risk\n"
-                    f"slope {srow['estimate']:.3f} "
-                    f"[{srow['ci_lower']:.3f}, {srow['ci_upper']:.3f}]  ({status})",
-                    fontsize=8.5,
+                slope_text = (
+                    f"Slope {srow['estimate']:.3f}\n"
+                    f"[{srow['ci_lower']:.3f}, {srow['ci_upper']:.3f}]\n{status}"
                 )
+            panel_title = f"{centre}\n{scale.replace('_', '-')} risk"
+            _set_panel_header(ax, panel_letter, panel_title, fontsize=8.0, pad=5.0)
+            ax.text(
+                0.04,
+                0.95,
+                slope_text,
+                transform=ax.transAxes,
+                ha="left",
+                va="top",
+                fontsize=8.0,
+                color=FIGURE_INK,
+                bbox={
+                    "boxstyle": "round,pad=0.25",
+                    "facecolor": "white",
+                    "edgecolor": "#3f3f3f",
+                    "linewidth": 1.0,
+                    "alpha": 0.92,
+                },
+                zorder=6,
+            )
             ax.set_xlim(0, 0.8)
             ax.set_ylim(0, 0.8)
+            ax.grid(color=FIGURE_GRID, alpha=0.55, linewidth=0.8)
             if col_index == 0:
-                ax.set_ylabel("Observed risk")
+                ax.set_ylabel("Observed risk", fontsize=9.0)
             if row_index == 1:
-                ax.set_xlabel("Mean predicted risk")
+                ax.set_xlabel("Mean predicted risk", fontsize=9.0)
 
-    fig.suptitle(
-        "Figure 3. Calibration of held-out overall survival at 730 days, minimal Cox, "
-        "before any recalibration",
-        fontsize=11,
+    fig.legend(
+        list(legend_handles.values()),
+        list(legend_handles.keys()),
+        loc="lower center",
+        ncol=len(legend_handles),
+        frameon=False,
+        fontsize=8.0,
     )
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.tight_layout(rect=(0, 0.055, 1, 1), h_pad=1.4, w_pad=0.8)
     path = output_dir / "figure3_calibration_os_730.png"
     _save(fig, path)
     return DisplayRecord(
@@ -465,12 +561,19 @@ def supplementary_calibration(
     if subset.empty:
         raise ReportContractError(f"{item} has no {endpoint}/{model} calibration rows")
 
-    fig, axes = plt.subplots(2, 3, figsize=(12.0, 7.6), sharex=True, sharey=True)
+    fig, axes = plt.subplots(
+        2,
+        3,
+        figsize=(MANUSCRIPT_FIGURE_WIDTH_IN, 5.1),
+        sharex=True,
+        sharey=True,
+    )
     for row_index, scale in enumerate(("unconditional", "entry_conditional")):
         for col_index, centre in enumerate(INSTITUTIONS):
             ax = axes[row_index][col_index]
+            panel_letter = chr(ord("A") + row_index * len(INSTITUTIONS) + col_index)
             cell = subset[(subset["centre"] == centre) & (subset["risk_scale"] == scale)]
-            ax.plot([0, 0.8], [0, 0.8], "--", color="#9e9e9e", linewidth=1.0)
+            ax.plot([0, 0.8], [0, 0.8], "--", color="#3f3f3f", linewidth=1.6)
             if not cell.empty:
                 ax.errorbar(
                     cell["mean_predicted_risk"],
@@ -478,18 +581,23 @@ def supplementary_calibration(
                     yerr=cell["observed_risk_se"],
                     fmt="o-",
                     color="#1a73e8",
-                    ecolor="#90caf9",
-                    capsize=3,
-                    linewidth=1.3,
-                    markersize=5,
+                    ecolor="#376d9f",
+                    capsize=3.5,
+                    capthick=1.5,
+                    elinewidth=1.5,
+                    linewidth=2.0,
+                    markersize=6.2,
+                    markeredgewidth=1.2,
                 )
                 max_n = max(float(cell["n"].max()), 1.0)
                 ax.bar(
                     cell["mean_predicted_risk"],
                     0.065 * cell["n"].astype(float) / max_n,
                     width=0.018,
-                    color="#5f6368",
-                    alpha=0.18,
+                    color="#595959",
+                    edgecolor="#262626",
+                    linewidth=0.8,
+                    alpha=0.48,
                 )
             slope = performance[
                 (performance["endpoint"] == endpoint)
@@ -500,22 +608,42 @@ def supplementary_calibration(
                 & (performance["horizon"] == PRIMARY_HORIZON)
                 & (performance["risk_scale"] == scale)
             ]
+            slope_text = "Slope not computable"
             if not slope.empty:
                 srow = slope.iloc[0]
-                ax.set_title(
-                    f"{centre} - {scale}\nslope {srow['estimate']:.3f} "
-                    f"[{srow['ci_lower']:.3f}, {srow['ci_upper']:.3f}] "
-                    f"({_status_label(srow['reporting_status'])})",
-                    fontsize=8.5,
+                slope_text = (
+                    f"Slope {srow['estimate']:.3f}\n"
+                    f"[{srow['ci_lower']:.3f}, {srow['ci_upper']:.3f}]\n"
+                    f"{_status_label(srow['reporting_status'])}"
                 )
+            panel_title = f"{centre}\n{scale.replace('_', '-')} risk"
+            _set_panel_header(ax, panel_letter, panel_title, fontsize=8.0, pad=5.0)
+            ax.text(
+                0.04,
+                0.95,
+                slope_text,
+                transform=ax.transAxes,
+                ha="left",
+                va="top",
+                fontsize=8.0,
+                color=FIGURE_INK,
+                bbox={
+                    "boxstyle": "round,pad=0.25",
+                    "facecolor": "white",
+                    "edgecolor": "#3f3f3f",
+                    "linewidth": 1.0,
+                    "alpha": 0.92,
+                },
+                zorder=6,
+            )
             ax.set_xlim(0, 0.8)
             ax.set_ylim(0, 0.8)
+            ax.grid(color=FIGURE_GRID, alpha=0.55, linewidth=0.8)
             if col_index == 0:
-                ax.set_ylabel("Observed risk")
+                ax.set_ylabel("Observed risk", fontsize=9.0)
             if row_index == 1:
-                ax.set_xlabel("Mean predicted risk")
-    fig.suptitle(f"{item}. Held-out {endpoint} calibration at 730 days, {model}", fontsize=11)
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
+                ax.set_xlabel("Mean predicted risk", fontsize=9.0)
+    fig.tight_layout(h_pad=1.4, w_pad=0.8)
     safe_endpoint = endpoint.lower().replace("-", "_")
     path = output_dir / f"{item.lower().replace(' ', '_')}_{safe_endpoint}_{model}.png"
     _save(fig, path)
@@ -548,7 +676,11 @@ def supplementary_attribution(inputs: CanonicalInputs, output_dir: Path) -> Disp
     if panel_a.empty:
         raise ReportContractError("Supplementary attribution panel has no 730-day importance")
 
-    fig, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(14.0, 6.4))
+    fig, (ax_a, ax_b) = plt.subplots(
+        1,
+        2,
+        figsize=(MANUSCRIPT_FIGURE_WIDTH_IN, 3.7),
+    )
 
     centres = [c for c in INSTITUTIONS if c in set(panel_a["centre"].astype(str))]
     groups = sorted(panel_a["feature_group"].astype(str).unique())
@@ -569,15 +701,16 @@ def supplementary_attribution(inputs: CanonicalInputs, output_dir: Path) -> Disp
             xs,
             ys,
             color=colours.get(centre, "#5f6368"),
-            s=32,
+            s=48,
+            linewidths=1.2,
             label=centre,
         )
 
-    ax_a.axvline(0.0, color="#9e9e9e", linestyle="--", linewidth=1.0)
+    ax_a.axvline(0.0, color="#3f3f3f", linestyle="--", linewidth=1.5)
     ax_a.set_yticks(range(len(groups)))
     ax_a.set_yticklabels(groups, fontsize=8.5)
-    ax_a.set_xlabel("Decrease in 730-day AUC after grouped permutation")
-    ax_a.set_title("A. Grouped permutation importance, overall survival", fontsize=10)
+    ax_a.set_xlabel("Decrease in 730-day AUC after grouped permutation", fontsize=8.5)
+    _set_panel_header(ax_a, "A", "Grouped permutation importance, OS", fontsize=8.5)
     ax_a.legend(fontsize=8, title="Development scope", title_fontsize=8)
 
     minimal = stability[stability["model_name"].astype(str) == "minimal_cox"].copy()
@@ -607,14 +740,16 @@ def supplementary_attribution(inputs: CanonicalInputs, output_dir: Path) -> Disp
     bar_colours = ["#1a73e8" if k == "cross_centre" else "#f9ab00" for k in kinds]
     positions = list(range(len(labels)))
     ax_b.barh(positions, [0.0 if pd.isna(t) else t for t in taus], color=bar_colours, height=0.62)
-    ax_b.axvline(0.0, color="#5f6368", linewidth=1.0)
+    ax_b.axvline(0.0, color="#3f3f3f", linewidth=1.5)
     ax_b.set_yticks(positions)
-    ax_b.set_yticklabels(labels, fontsize=7.5)
+    ax_b.set_yticklabels(labels, fontsize=8.0)
     ax_b.set_xlim(-1.15, 1.15)
-    ax_b.set_xlabel("Kendall's tau (attribution rank agreement)")
-    ax_b.set_title(
-        "B. Attribution rank agreement\nblue = across centres, amber = across endpoints",
-        fontsize=10,
+    ax_b.set_xlabel("Kendall's tau (attribution rank agreement)", fontsize=8.5)
+    _set_panel_header(
+        ax_b,
+        "B",
+        "Attribution rank agreement\nblue = centres; amber = endpoints",
+        fontsize=8.5,
     )
     for index, (tau, status) in enumerate(zip(taus, statuses, strict=False)):
         # A bar of length zero and an absent bar look identical. Both are labelled so the reader
@@ -623,7 +758,7 @@ def supplementary_attribution(inputs: CanonicalInputs, output_dir: Path) -> Disp
             ax_b.annotate(
                 "not comparable" if status != "comparable" else "not computable",
                 xy=(0.02, index),
-                fontsize=7,
+                fontsize=8,
                 va="center",
                 color="#5f6368",
                 style="italic",
@@ -632,7 +767,7 @@ def supplementary_attribution(inputs: CanonicalInputs, output_dir: Path) -> Disp
             ax_b.annotate(
                 "tau = 0.000",
                 xy=(0.02, index),
-                fontsize=7,
+                fontsize=8,
                 va="center",
                 color="#3c4043",
                 style="italic",
@@ -641,17 +776,14 @@ def supplementary_attribution(inputs: CanonicalInputs, output_dir: Path) -> Disp
             ax_b.annotate(
                 "complete reversal",
                 xy=(tau + 0.04, index),
-                fontsize=7,
+                fontsize=8,
                 va="center",
                 color="#d93025",
                 fontweight="bold",
             )
 
-    fig.suptitle("Supplementary Figure S25. Feature attribution and stability", fontsize=11)
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
-    # The save-time font enlargement lengthens panel B's two-line row labels beyond the gap
-    # tight_layout reserved; widen the inter-panel gap so they cannot reach into panel A.
-    fig.subplots_adjust(wspace=0.55)
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0.62)
     path = output_dir / "supplementary_figure_s25_attribution.png"
     _save(fig, path)
     return DisplayRecord(
@@ -686,7 +818,11 @@ def figure4_sequencing_lag(inputs: CanonicalInputs, output_dir: Path) -> Display
         t for t in ("by_folfox", "90d", "180d", "365d", "unrestricted") if t in set(km["threshold"])
     ]
     fig, (ax_top, ax_bottom) = plt.subplots(
-        2, 1, figsize=(9.0, 7.4), sharex=True, gridspec_kw={"height_ratios": [2.1, 1.0]}
+        2,
+        1,
+        figsize=(MANUSCRIPT_FIGURE_WIDTH_IN, 5.2),
+        sharex=True,
+        gridspec_kw={"height_ratios": [2.1, 1.0]},
     )
 
     minimum_events = 20
@@ -717,23 +853,23 @@ def figure4_sequencing_lag(inputs: CanonicalInputs, output_dir: Path) -> Display
             xs,
             ys,
             marker="o",
-            linewidth=1.6 if group != "All" else 2.2,
+            linewidth=2.1 if group != "All" else 2.7,
             linestyle="-" if group != "All" else "--",
             color=colours.get(group, "#5f6368"),
             label=group,
-            markersize=5,
+            markersize=6.5,
+            markeredgewidth=1.2,
         )
 
-    ax_top.set_ylabel("730-day survival (Kaplan-Meier)")
-    ax_top.set_title(
-        "A. 730-day OS point estimates (shown only with >=20 events)",
-        loc="left",
-        fontsize=9.2,
-        fontweight="bold",
-        pad=8,
+    ax_top.set_ylabel("730-day survival (Kaplan-Meier)", fontsize=9.0)
+    _set_panel_header(
+        ax_top,
+        "A",
+        "730-day OS point estimates (shown only with >=20 events)",
+        fontsize=9.0,
     )
     ax_top.legend(fontsize=8, title="Centre", title_fontsize=8)
-    ax_top.grid(alpha=0.25, linewidth=0.6)
+    ax_top.grid(color=FIGURE_GRID, alpha=0.65, linewidth=0.8)
     ax_top.text(
         0.01,
         0.04,
@@ -741,8 +877,8 @@ def figure4_sequencing_lag(inputs: CanonicalInputs, output_dir: Path) -> Display
         transform=ax_top.transAxes,
         ha="left",
         va="bottom",
-        fontsize=7.6,
-        color="#5f6368",
+        fontsize=8.0,
+        color=FIGURE_INK,
     )
 
     width = 0.2
@@ -757,7 +893,13 @@ def figure4_sequencing_lag(inputs: CanonicalInputs, output_dir: Path) -> Display
             heights.append(int(match.iloc[0]["n_patients"]))
             events.append(int(match.iloc[0]["n_events"]))
         bars = ax_bottom.bar(
-            xs, heights, width=width, color=colours.get(group, "#5f6368"), label=group
+            xs,
+            heights,
+            width=width,
+            color=colours.get(group, "#5f6368"),
+            edgecolor=FIGURE_INK,
+            linewidth=0.8,
+            label=group,
         )
         for bar, event_count in zip(bars, events, strict=False):
             ax_bottom.text(
@@ -765,31 +907,25 @@ def figure4_sequencing_lag(inputs: CanonicalInputs, output_dir: Path) -> Display
                 bar.get_height() + 3,
                 str(event_count),
                 ha="center",
-                fontsize=6.4,
-                color="#3c4043",
+                fontsize=8.0,
+                color=FIGURE_INK,
             )
 
-    ax_bottom.set_ylabel("Retained patients\n(bar label = events)")
-    ax_bottom.set_title(
-        "B. Retained patients and eligible OS events (all thresholds)",
-        loc="left",
-        fontsize=9.2,
-        fontweight="bold",
-        pad=8,
+    ax_bottom.set_ylabel("Retained patients\n(bar label = events)", fontsize=9.0)
+    _set_panel_header(
+        ax_bottom,
+        "B",
+        "Retained patients and eligible OS events (all thresholds)",
+        fontsize=9.0,
     )
     ax_bottom.set_xticks(range(len(order)))
     ax_bottom.set_xticklabels(
         ["By FOLFOX", "<= 90 d", "<= 180 d", "<= 365 d", "Unrestricted"][: len(order)]
     )
-    ax_bottom.set_xlabel("Maximum permitted post-FOLFOX sequencing lag")
-    ax_bottom.grid(alpha=0.25, axis="y", linewidth=0.6)
+    ax_bottom.set_xlabel("Maximum permitted post-FOLFOX sequencing lag", fontsize=9.0)
+    ax_bottom.grid(color=FIGURE_GRID, alpha=0.65, axis="y", linewidth=0.8)
 
-    fig.suptitle(
-        "Figure 4. Sequencing-lag support and 730-day survival sensitivity",
-        fontsize=10.5,
-        y=0.995,
-    )
-    fig.tight_layout(rect=(0, 0, 1, 0.965))
+    fig.tight_layout(h_pad=1.4)
     path = output_dir / "figure4_sequencing_lag.png"
     _save(fig, path)
     return DisplayRecord(
